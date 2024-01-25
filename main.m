@@ -20,27 +20,27 @@ char code[] =
 "\xe0\x03\x00\x91"      // mov x0, sp
 "\xe1\x03\x1f\xaa"      // mov x1, xzr
 "\xe3\x03\x1f\xaa"      // mov x3, xzr
-"\x82\x01\x00\x10"                // adr        x2, #0x38           ; function pointer for arg2
-"\xE2\x23\xC1\xDA"                // paciza     x2
-"\x09\x01\x00\x10"                // adr        x9, #0x24           ; pointer to pthrdcrt
-"\x29\x01\x40\xF9"                // ldr        x9, [x9]            ; dereference for value
-"\x20\x01\x3F\xD6"                // blr        x9                  ; call pthrdcrt
-"\x09\x00\x00\x10"                // adr        x9, #0              ; while loop
-"\x20\x01\x1F\xD6"                // br         x9                  ; waiting to be killed
-"\xFD\x7B\x42\xA9"                // ldp        x29, x30, [sp, #0x20]
-"\xFF\xC3\x00\x91"                // add        sp, sp, #0x30
-"\xC0\x03\x5F\xD6"                // ret
+"\x82\x01\x00\x10"      // adr x2, #52
+"\xe2\x23\xc1\xda"      // paciza x2
+"\x09\x01\x00\x10"      // adr x9, #32
+"\x29\x01\x40\xf9"      // dereference the pointer
+"\x20\x01\x3f\xd6"      // call pthread_create_from_mach_thread
+"\x09\x00\x00\x10"      // adr x9, #0
+"\x20\x01\x1f\xd6"      // br x9
+"\xfd\x7b\x42\xa9"      // ldp x29, x30, [sp, #0x20]
+"\xFF\xC3\x00\x91"      // add sp, sp, #0x30
+"\xC0\x03\x5F\xD6"      // ret
 "PTHRDCRT"
 
-"\x7F\x23\x03\xD5"                // pacibsp
-"\xFF\xC3\x00\xD1"                // sub        sp, sp, #0x30
-"\xFD\x7B\x02\xA9"                // stp        x29, x30, [sp, #0x20]
-"\xFD\x83\x00\x91"                // add        x29, sp, #0x20
-"\x21\x00\x80\xD2"                // mov        x1, #1              ; RTLD_LAZY
-"\xa0\x01\x00\x10"                // adr        x0, #0x2c           ; char *libPath
-"\x09\x01\x00\x10"                // adr        x9, #0x20
-"\x29\x01\x40\xf9"                // ldr        x9, [x9]
-"\x20\x01\x3f\xd6"                // blr        x9                  ; call dlopen
+"\x7f\x23\x03\xd5"      // pacibsp
+"\xff\xc3\x00\xd1"      // sub sp, sp, #0x30
+"\xfd\x7b\x02\xa9"      // stp x29, x30, [sp, #0x20]
+"\xFD\x83\x00\x91"      // add x29, sp, #0x20
+"\x21\x00\x80\xd2"      // mov x1, #1
+"\xa0\x01\x00\x10"      // adr x0, libliblib
+"\x09\x01\x00\x10"      // adr x9, dlopen__
+"\x29\x01\x40\xf9"      // ldr x9, [x9]
+"\x20\x01\x3f\xd6"      // blr x9
 "\x00\x00\x80\xd2"      // movz x0, 0
 "\xc9\x00\x00\x10"      // mov x9, pthr_exit
 "\x29\x01\x40\xf9"      // ldr x9, [x9]
