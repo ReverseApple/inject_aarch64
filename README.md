@@ -16,7 +16,9 @@ static void ctor(void)
     printf("hello from ReverseApple\n");
 }
 $ gcc lib.c -dynamiclib -o lib.dylib -arch arm64e
-$ # copy to this location to respect the sandbox
+$ # create ~/Library/Logs/AirTraffic directory because it can be read from sandbox
+$ mkdir ~/Library/Logs/AirTraffic
+$ # copy to previous location to respect the sandbox
 $ cp lib.dylib ~/Library/Logs/AirTraffic/airtraffic.log
 $ sudo ./inject_arm64e 42448 ~/Library/Logs/AirTraffic/airtraffic.log
 ```
