@@ -2,6 +2,8 @@
 
 Simply clone the directory and run `make` which will create `inject_arm64` and `inject_arm64e` respectively.
 
+__NOTE:__ AMFI needs to be turned off for arm64e if you are targeting Apple binaries
+
 Below is a simple usage on the Books application.
 
 First step is creating the library.
