@@ -359,8 +359,6 @@ int main(int argc, char **argv) {
   state.__sp = (uintptr_t)remoteStack;
 #endif
 
-  getchar();
-
   thread_act_t thread;
   kr = thread_create_running(remoteTask, flavor, (thread_state_t)&state, count,
                              &thread);
