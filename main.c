@@ -96,6 +96,9 @@ char code[] =
     "\x00\x00\x00\x00";
 #endif
 
+// This code is based on the https://gist.github.com/saagarjha/a70d44951cb72f82efee3317d80ac07f
+// which uses EndpointSecurity and works with AMFI turned on
+// with library validation disabled
 #ifdef AMFI
 // patch _amfi_dyld_check_policy_self to return 0x5f
 // meaning everything is allowed
